@@ -4,6 +4,7 @@ Flask Web 应用入口
 """
 import os
 import threading
+from pathlib import Path
 from flask import Flask, render_template, request, jsonify, Response
 from compressor import ImageCompressor
 import time
@@ -194,6 +195,65 @@ def api_progress():
             'X-Accel-Buffering': 'no'
         }
     )
+
+
+@app.route('/api/directories')
+def api_directories():
+    """获取指定路径下的子目录列表"""
+    base_path = request.args.get('path', DEFAULT_INPUT_DIR)
+
+    try:
+        path = Path(base_path)
+        if not path.exists():
+            return jsonify({
+                'success': False,
+                'error': '路径不存在',
+                'directories': []
+            })
+
+        # 获取直接子目录
+        subdirs = [d for d in path.iterdir() if d.is_dir()]
+
+        directories = []
+        for subdir in sorted(subdirs, key=lambda x: x.name.lower()):
+            directories.append({
+                'name': subdir.name,
+                'path': str(subdir),
+                'has_subdirs': any(d.is_dir() for d in subdir.iterdir())
+            })
+
+        # 添加父目录选项（如果有）
+        parent = path.parent
+        can_go_up = str(parent) != str(path) and str(path) != '/'
+
+        return jsonify({
+            'success': True,
+            'current_path': str(path),
+            'can_go_up': can_go_up,
+            'parent_path': str(parent) if can_go_up else None,
+            'directories': directories
+        })
+    except PermissionError:
+        return jsonify({
+            'success': False,
+            'error': '无权访问该路径',
+            'directories': []
+        }), 403
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'directories': []
+        }), 500
+
+
+@app.route('/api/current-path')
+def api_current_path():
+    """获取当前默认路径配置"""
+    return jsonify({
+        'input_dir': DEFAULT_INPUT_DIR,
+        'output_dir': DEFAULT_OUTPUT_DIR
+    })
 
 
 if __name__ == '__main__':
