@@ -489,6 +489,19 @@ h2 {
     border-color: #3498db;
 }
 
+.dir-item.selected {
+    background: #d4edda;
+    border-color: #28a745;
+}
+
+.dir-item.has-subdirs {
+    background: #fff3e0;
+}
+
+.dir-item.has-subdirs:hover {
+    background: #ffe0b2;
+}
+
 .dir-item.dir-up {
     background: #fff3e0;
     color: #ef6c00;

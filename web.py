@@ -22,9 +22,19 @@ DEFAULT_OUTPUT_DIR = os.environ.get('DEFAULT_OUTPUT_DIR', '/output')
 
 @app.route('/')
 def index():
-    """管理后台首页"""
+    """管理后台首页（原生 JS 版）"""
     return render_template(
         'index.html',
+        default_input=DEFAULT_INPUT_DIR,
+        default_output=DEFAULT_OUTPUT_DIR
+    )
+
+
+@app.route('/vue')
+def index_vue():
+    """管理后台首页（Vue 版）"""
+    return render_template(
+        'index-vue.html',
         default_input=DEFAULT_INPUT_DIR,
         default_output=DEFAULT_OUTPUT_DIR
     )

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片压缩工具 v1.2 - 管理后台</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    {% raw %}
+    <div id="app" class="container">
+        <header>
+            <h1>🖼️ 图片压缩工具 <span class="version">v1.2</span></h1>
+            <p class="subtitle">Web 管理后台 (Vue 版)</p>
+        </header>
+
+        <main>
+            <!-- 配置区域 -->
+            <section class="config-section">
+                <h2>⚙️ 压缩配置</h2>
+                <div class="form-group">
+                    <label for="inputDir">输入目录：</label>
+                    <div class="input-with-select">
+                        <input
+                            type="text"
+                            id="inputDir"
+                            v-model="config.input_dir"
+                            :disabled="isRunning"
+                            placeholder="/photos"
+                        >
+                        <button
+                            type="button"
+                            class="btn-browse"
+                            @click="openDirectoryBrowser('input')"
+                            :disabled="isRunning"
+                            title="浏览目录"
+                        >📁</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="outputDir">输出目录：</label>
+                    <div class="input-with-select">
+                        <input
+                            type="text"
+                            id="outputDir"
+                            v-model="config.output_dir"
+                            :disabled="isRunning"
+                            placeholder="/output"
+                        >
+                        <button
+                            type="button"
+                            class="btn-browse"
+                            @click="openDirectoryBrowser('output')"
+                            :disabled="isRunning"
+                            title="浏览目录"
+                        >📁</button>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="jobs">线程数：</label>
+                        <input
+                            type="number"
+                            id="jobs"
+                            v-model.number="config.jobs"
+                            :disabled="isRunning"
+                            min="1"
+                            max="16"
+                        >
+                    </div>
+                    <div class="form-group">
+                        <label for="prefix">前缀：</label>
+                        <input
+                            type="text"
+                            id="prefix"
+                            v-model="config.prefix"
+                            :disabled="isRunning"
+                            placeholder="DSC"
+                        >
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <label>
+                            <input
+                                type="checkbox"
+                                id="noSkip"
+                                v-model="config.no_skip"
+                                :disabled="isRunning"
+                            >
+                            不跳过已压缩文件
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 控制按钮 -->
+            <section class="control-section">
+                <button
+                    class="btn btn-primary"
+                    @click="startCompression"
+                    :disabled="isRunning"
+                >
+                    ▶️ 开始压缩
+                </button>
+                <button
+                    class="btn btn-danger"
+                    @click="stopCompression"
+                    :disabled="!isRunning"
+                >
+                    ⏹️ 停止
+                </button>
+            </section>
+
+            <!-- 进度显示 -->
+            <section class="progress-section">
+                <h2>📊 压缩进度</h2>
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div
+                            class="progress-fill"
+                            :style="{ width: progress.percentage + '%' }"
+                        ></div>
+                    </div>
+                    <div class="progress-text">
+                        {{ progress.percentage }}% ({{ progress.processed_count }}/{{ progress.total_files }})
+                    </div>
+                </div>
+                <div class="stats">
+                    <span class="stat-item">
+                        ✅ 成功：<strong>{{ progress.success_count }}</strong>
+                    </span>
+                    <span class="stat-item">
+                        ❌ 失败：<strong>{{ progress.failed_count }}</strong>
+                    </span>
+                    <span class="stat-item">
+                        📁 总计：<strong>{{ progress.total_files }}</strong>
+                    </span>
+                </div>
+                <div
+                    class="status-badge"
+                    :class="{ running: isRunning }"
+                >
+                    <span class="dot"></span> {{ statusText }}
+                </div>
+            </section>
+
+            <!-- 日志区域 -->
+            <section class="log-section">
+                <h2>📝 日志输出</h2>
+                <div class="log-container" ref="logContainer">
+                    <div v-if="logs.length === 0" class="log-empty">
+                        等待开始压缩...
+                    </div>
+                    <div
+                        v-for="(log, index) in logs"
+                        :key="index"
+                        class="log-entry"
+                        :class="getLogClass(log)"
+                    >
+                        {{ log }}
+                    </div>
+                </div>
+            </section>
+
+            <!-- 目录浏览器模态框 -->
+            <div
+                v-show="modal.show"
+                class="modal"
+                :class="{ show: modal.show }"
+                @click.self="closeModal"
+            >
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>选择<span v-text="modal.target === 'input' ? '输入' : '输出'"></span>目录</h3>
+                        <button class="modal-close" @click="closeModal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="path-nav">
+                            <span class="path-current">{{ modal.currentPath }}</span>
+                        </div>
+                        <div class="directory-list">
+                            <div
+                                v-if="modal.canGoUp"
+                                class="dir-item dir-up"
+                                @click="navigateTo(modal.parentPath)"
+                            >
+                                <span class="dir-icon">📁</span>
+                                <span class="dir-name">.. 返回上级</span>
+                            </div>
+                            <div
+                                v-for="dir in modal.directories"
+                                :key="dir.path"
+                                class="dir-item"
+                                :class="{
+                                    'selected': modal.selectedPath === dir.path,
+                                    'has-subdirs': dir.has_subdirs
+                                }"
+                                @click="selectOrNavigate(dir)"
+                            >
+                                <span class="dir-icon">{{ dir.has_subdirs ? '📂' : '📁' }}</span>
+                                <span class="dir-name">{{ dir.name }}</span>
+                            </div>
+                            <div
+                                v-if="modal.directories.length === 0 && !modal.canGoUp"
+                                class="dir-item"
+                                style="cursor: default; color: #999;"
+                            >
+                                暂无子目录
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" @click="closeModal">取消</button>
+                        <button class="btn btn-primary" @click="confirmDirectory">确定</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>图片压缩工具 v1.2 | Powered by Vue 3 + Flask + ImageMagick</p>
+        </footer>
+    </div>
+    {% endraw %}
+
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+    <script src="/static/app-vue.js"></script>
+</body>
+</html>
