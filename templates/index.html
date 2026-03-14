@@ -19,11 +19,42 @@
                 <h2>⚙️ 压缩配置</h2>
                 <div class="form-group">
                     <label for="inputDir">输入目录：</label>
-                    <input type="text" id="inputDir" value="{{ default_input }}" placeholder="/photos">
+                    <div class="input-with-select">
+                        <input type="text" id="inputDir" value="{{ default_input }}" placeholder="/photos">
+                        <button type="button" id="browseInputBtn" class="btn-browse" title="浏览目录">📁</button>
+                    </div>
+                    <!-- 目录选择器弹窗 -->
+                    <div id="directoryModal" class="modal">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h3>选择输入目录</h3>
+                                <button class="modal-close">&times;</button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="path-nav" id="pathNav">
+                                    <span class="path-current">/photos</span>
+                                </div>
+                                <div class="directory-list" id="directoryList">
+                                    <div class="dir-item dir-up" data-path="..">
+                                        <span class="dir-icon">📁</span>
+                                        <span class="dir-name">.. 返回上级</span>
+                                    </div>
+                                    <!-- 动态生成子目录 -->
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-secondary modal-cancel">取消</button>
+                                <button class="btn btn-primary modal-confirm">确定</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="outputDir">输出目录：</label>
-                    <input type="text" id="outputDir" value="{{ default_output }}" placeholder="/output">
+                    <div class="input-with-select">
+                        <input type="text" id="outputDir" value="{{ default_output }}" placeholder="/output">
+                        <button type="button" id="browseOutputBtn" class="btn-browse" title="浏览目录">📁</button>
+                    </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">

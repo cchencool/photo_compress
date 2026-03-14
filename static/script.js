@@ -18,7 +18,15 @@ const elements = {
     failedCount: document.getElementById('failedCount'),
     totalCount: document.getElementById('totalCount'),
     statusBadge: document.getElementById('statusBadge'),
-    logContainer: document.getElementById('logContainer')
+    logContainer: document.getElementById('logContainer'),
+    browseInputBtn: document.getElementById('browseInputBtn'),
+    browseOutputBtn: document.getElementById('browseOutputBtn'),
+    directoryModal: document.getElementById('directoryModal'),
+    directoryList: document.getElementById('directoryList'),
+    pathNav: document.getElementById('pathNav'),
+    modalClose: document.querySelector('.modal-close'),
+    modalCancel: document.querySelector('.modal-cancel'),
+    modalConfirm: document.querySelector('.modal-confirm')
 };
 
 // 状态
@@ -27,12 +35,47 @@ let logSource = null;
 let progressSource = null;
 let logLineCount = 0;
 
+// 目录浏览器状态
+let directoryBrowser = {
+    currentPath: '/photos',
+    targetInput: null,  // 'input' or 'output'
+    selectedPath: null
+};
+
 /**
  * 初始化事件监听
  */
 function init() {
     elements.startBtn.addEventListener('click', startCompression);
     elements.stopBtn.addEventListener('click', stopCompression);
+
+    // 目录浏览按钮
+    if (elements.browseInputBtn) {
+        elements.browseInputBtn.addEventListener('click', () => openDirectoryBrowser('input'));
+    }
+    if (elements.browseOutputBtn) {
+        elements.browseOutputBtn.addEventListener('click', () => openDirectoryBrowser('output'));
+    }
+
+    // 模态框事件
+    if (elements.modalClose) {
+        elements.modalClose.addEventListener('click', closeModal);
+    }
+    if (elements.modalCancel) {
+        elements.modalCancel.addEventListener('click', closeModal);
+    }
+    if (elements.modalConfirm) {
+        elements.modalConfirm.addEventListener('click', confirmDirectorySelection);
+    }
+
+    // 点击模态框外部关闭
+    if (elements.directoryModal) {
+        elements.directoryModal.addEventListener('click', (e) => {
+            if (e.target === elements.directoryModal) {
+                closeModal();
+            }
+        });
+    }
 
     // 初始检查状态
     checkStatus();
@@ -221,6 +264,134 @@ function addLog(message, type = '') {
 
     // 滚动到底部
     elements.logContainer.scrollTop = elements.logContainer.scrollHeight;
+}
+
+/**
+ * 打开目录浏览器
+ */
+async function openDirectoryBrowser(target) {
+    directoryBrowser.targetInput = target;
+    directoryBrowser.selectedPath = null;
+
+    // 根据目标设置当前路径
+    if (target === 'input') {
+        directoryBrowser.currentPath = elements.inputDir.value.trim() || '/photos';
+    } else {
+        directoryBrowser.currentPath = elements.outputDir.value.trim() || '/output';
+    }
+
+    // 显示模态框
+    elements.directoryModal.classList.add('show');
+
+    // 加载目录列表
+    await loadDirectories(directoryBrowser.currentPath);
+}
+
+/**
+ * 加载目录列表
+ */
+async function loadDirectories(path) {
+    try {
+        const response = await fetch(`/api/directories?path=${encodeURIComponent(path)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            // 更新路径导航
+            elements.pathNav.innerHTML = `<span class="path-current">${data.current_path}</span>`;
+
+            // 构建目录列表
+            let html = '';
+
+            // 返回上级目录
+            if (data.can_go_up) {
+                html += `
+                    <div class="dir-item dir-up" data-path="${data.parent_path}">
+                        <span class="dir-icon">📁</span>
+                        <span class="dir-name">.. 返回上级</span>
+                    </div>
+                `;
+            }
+
+            // 子目录列表
+            if (data.directories.length === 0) {
+                html += '<div class="dir-item" style="cursor: default; color: #999;">暂无子目录</div>';
+            } else {
+                data.directories.forEach(dir => {
+                    const icon = dir.has_subdirs ? '📂' : '📁';
+                    html += `
+                        <div class="dir-item" data-path="${dir.path}" data-has-subdirs="${dir.has_subdirs}">
+                            <span class="dir-icon">${icon}</span>
+                            <span class="dir-name">${dir.name}</span>
+                        </div>
+                    `;
+                });
+            }
+
+            elements.directoryList.innerHTML = html;
+
+            // 绑定点击事件
+            document.querySelectorAll('.dir-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const dirPath = item.dataset.path;
+                    if (item.classList.contains('dir-up') || item.dataset.has_subdirs === 'true') {
+                        // 导航到该目录
+                        loadDirectories(dirPath);
+                    } else {
+                        // 选择该目录
+                        selectDirectory(dirPath);
+                    }
+                });
+            });
+
+            // 更新当前路径
+            directoryBrowser.currentPath = data.current_path;
+        } else {
+            elements.directoryList.innerHTML = `<div class="dir-item" style="color: #e74c3c;">${data.error || '加载失败'}</div>`;
+        }
+    } catch (error) {
+        console.error('加载目录失败:', error);
+        elements.directoryList.innerHTML = `<div class="dir-item" style="color: #e74c3c;">加载失败：${error.message}</div>`;
+    }
+}
+
+/**
+ * 选择目录
+ */
+function selectDirectory(path) {
+    directoryBrowser.selectedPath = path;
+
+    // 高亮选中项
+    document.querySelectorAll('.dir-item').forEach(item => {
+        item.style.background = '';
+        item.style.borderColor = '';
+        if (item.dataset.path === path) {
+            item.style.background = '#d4edda';
+            item.style.borderColor = '#28a745';
+        }
+    });
+}
+
+/**
+ * 确认目录选择
+ */
+function confirmDirectorySelection() {
+    const path = directoryBrowser.selectedPath || directoryBrowser.currentPath;
+
+    if (directoryBrowser.targetInput === 'input') {
+        elements.inputDir.value = path;
+    } else {
+        elements.outputDir.value = path;
+    }
+
+    closeModal();
+}
+
+/**
+ * 关闭模态框
+ */
+function closeModal() {
+    elements.directoryModal.classList.remove('show');
+    directoryBrowser.selectedPath = null;
 }
 
 // 页面加载完成后初始化
