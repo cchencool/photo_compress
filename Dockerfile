@@ -31,7 +31,7 @@ ENV DEFAULT_INPUT_DIR=/photos
 ENV DEFAULT_OUTPUT_DIR=/output
 
 # 暴露 Web 端口
-EXPOSE 5000
+EXPOSE 5555
 
 # 入口点 - Flask Web 应用
 ENTRYPOINT ["python", "web.py"]
