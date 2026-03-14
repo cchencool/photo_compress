@@ -26,7 +26,9 @@ class ImageCompressor:
         no_skip: bool = False
     ):
         self.input_dir = Path(input_dir).resolve()
-        self.output_dir = Path(output_dir).resolve()
+        # 自动使用输入目录的最后一级文件夹名作为输出子目录
+        base_output_dir = Path(output_dir).resolve()
+        self.output_dir = base_output_dir / self.input_dir.name
         self.jobs = jobs
         self.prefix = prefix
         self.no_skip = no_skip
