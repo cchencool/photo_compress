@@ -128,18 +128,15 @@ def api_logs():
             with compressor_lock:
                 if compressor is None:
                     logs = []
+                    is_running = False
                 else:
                     logs = compressor.get_logs(last_line)
-                    last_line = len(compressor.get_logs())
+                    is_running = compressor.is_running
 
             if logs:
                 for log in logs:
                     yield f"data: {log}\n\n"
                 last_line += len(logs)
-
-            # 检查是否有压缩任务在完成
-            with compressor_lock:
-                is_running = compressor is not None and compressor.is_running
 
             if not is_running and not logs:
                 # 任务完成且无新日志，发送结束标记

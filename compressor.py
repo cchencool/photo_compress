@@ -87,9 +87,10 @@ class ImageCompressor:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         log_msg = f"[{timestamp}] {message}"
         self._log_queue.put(log_msg)
-        self._log_history.append(log_msg)
-        if len(self._log_history) > self._max_log_lines:
-            self._log_history.pop(0)
+        with self._lock:
+            self._log_history.append(log_msg)
+            if len(self._log_history) > self._max_log_lines:
+                self._log_history.pop(0)
 
     def _find_image_files(self) -> list[Path]:
         """查找所有符合条件的图片文件"""
@@ -253,10 +254,9 @@ class ImageCompressor:
 
     def get_logs(self, start_line: int = 0) -> list[str]:
         """获取日志"""
-        with self._lock:
-            if start_line >= len(self._log_history):
-                return []
-            return self._log_history[start_line:]
+        if start_line >= len(self._log_history):
+            return []
+        return self._log_history[start_line:]
 
     def reset(self):
         """重置状态"""
