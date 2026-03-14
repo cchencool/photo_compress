@@ -6,9 +6,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     imagemagick \
     && rm -rf /var/lib/apt/lists/* \
     # 禁用 ImageMagick 的安全策略限制（允许处理各种图片格式）
-    && sed -i '/<policy domain="coder" rights="none" pattern="HTTPS"/d' /etc/ImageMagick-6/policy.xml \
-    && sed -i '/<policy domain="coder" rights="none" pattern="HTTP"/d' /etc/ImageMagick-6/policy.xml \
-    && sed -i '/<policy domain="coder" rights="none" pattern="URL"/d' /etc/ImageMagick-6/policy.xml
+    && (sed -i '/<policy domain="coder" rights="none" pattern="HTTPS"/d' /etc/ImageMagick-7/policy.xml 2>/dev/null || true) \
+    && (sed -i '/<policy domain="coder" rights="none" pattern="HTTP"/d' /etc/ImageMagick-7/policy.xml 2>/dev/null || true) \
+    && (sed -i '/<policy domain="coder" rights="none" pattern="URL"/d' /etc/ImageMagick-7/policy.xml 2>/dev/null || true)
 
 # 设置工作目录
 WORKDIR /app
