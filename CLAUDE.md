@@ -70,6 +70,7 @@ docker-compose up --build
 - `get_logs(start_line)`: 返回指定行之后的日志列表
 - 使用 `threading.Lock` 保护共享状态
 - 日志使用队列收集，限制最大缓冲行数（1000 行）
+- 输出目录自动使用输入目录的最后一级文件夹名（例：`/photos/2024-trip/` → `/output/2024-trip/`）
 
 ### SSE 推送
 - 日志和进度都使用 SSE 推送，非 WebSocket
