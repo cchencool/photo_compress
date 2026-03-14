@@ -4,7 +4,15 @@
       "Bash(git init:*)",
       "Bash(git branch:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(docker build:*)",
+      "Bash(docker run:*)",
+      "Bash(curl:*)",
+      "Bash(docker stop:*)",
+      "Bash(docker login:*)",
+      "Bash(docker push:*)",
+      "Bash(git push:*)"
     ]
   }
 }
