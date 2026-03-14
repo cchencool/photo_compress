@@ -1,0 +1,16 @@
+services:
+  photo-compressor:
+    build: .
+    container_name: photo-compressor
+    volumes:
+      # 挂载照片目录 - 修改为实际路径
+      - /path/to/photos:/photos
+      # 挂载输出目录
+      - ./output:/output
+      # 挂载日志目录（可选）
+      - ./logs:/logs
+    environment:
+      # 可选：设置日志级别
+      - LOG_LEVEL=INFO
+    # 默认命令，可通过 docker-compose run 覆盖
+    command: -i /photos -o /output -j 4 --prefix DSC
