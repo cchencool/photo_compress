@@ -126,6 +126,29 @@ createApp({
             }
         };
 
+        // 从日志中解析进度信息
+        const parseProgressFromLog = (log) => {
+            // 匹配格式：[xxx] [数字/数字]
+            const match = log.match(/\\[(\\d+)\\/(\\d+)\\]/);
+            if (match) {
+                const current = parseInt(match[1]);
+                const total = parseInt(match[2]);
+                if (total > 0) {
+                    progress.processed_count = current;
+                    progress.total_files = total;
+                    progress.percentage = Math.round(current / total * 1000) / 10;
+                }
+            }
+            // 匹配成功计数
+            if (log.includes('✅')) {
+                progress.success_count++;
+            }
+            // 匹配失败计数
+            if (log.includes('❌') || log.includes('⚠️')) {
+                progress.failed_count++;
+            }
+        };
+
         // 启动 SSE 监听
         const startSSEListeners = () => {
             // 关闭旧的连接
@@ -137,9 +160,13 @@ createApp({
             logSource.onmessage = (event) => {
                 if (event.data === '__END__') {
                     logSource.close();
+                    // 任务完成，重置状态
+                    isRunning.value = false;
                     return;
                 }
                 logs.value.push(event.data);
+                // 从日志中解析进度
+                parseProgressFromLog(event.data);
                 scrollToBottom();
             };
             logSource.onerror = () => {
@@ -147,15 +174,26 @@ createApp({
                 logSource.close();
             };
 
-            // 监听进度
+            // 监听进度 - 作为备用方案
             progressSource = new EventSource('/api/progress');
             progressSource.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    Object.assign(progress, data);
-                    if (!data.is_running) {
+                    // 只有当日志解析失败时才使用 SSE 进度
+                    if (progress.total_files === 0 && data.total_files > 0) {
+                        progress.is_running = data.is_running;
+                        progress.total_files = data.total_files;
+                        progress.processed_count = data.processed_count;
+                        progress.success_count = data.success_count;
+                        progress.failed_count = data.failed_count;
+                        progress.percentage = data.percentage;
+                    }
+
+                    // 当任务不再运行时，重置状态
+                    if (!data.is_running && isRunning.value) {
                         isRunning.value = false;
                         progressSource.close();
+                        logSource.close();
                     }
                 } catch (e) {
                     console.error('解析进度失败:', e);
@@ -163,7 +201,6 @@ createApp({
             };
             progressSource.onerror = () => {
                 console.error('进度 SSE 连接错误');
-                progressSource.close();
             };
         };
 

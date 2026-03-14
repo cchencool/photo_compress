@@ -220,15 +220,26 @@ def api_directories():
                 'has_subdirs': any(d.is_dir() for d in subdir.iterdir())
             })
 
-        # 添加父目录选项（如果有）
-        parent = path.parent
-        can_go_up = str(parent) != str(path) and str(path) != '/'
+        # 不允许返回挂载路径的上级目录
+        # 限制只能在 /photos 和 /output 目录下浏览
+        allowed_roots = [Path('/photos'), Path('/output')]
+        can_go_up = False
+        parent_path = None
+
+        if str(path) != '/' and path.parent in allowed_roots:
+            # 当前路径是 allowed_roots 的直接子目录，可以返回上级
+            can_go_up = True
+            parent_path = str(path.parent)
+        elif str(path) == '/' or path in allowed_roots:
+            # 已经是根目录或允许的根目录，不能继续向上
+            can_go_up = False
+        # 其他情况（更深层级），不允许返回上级
 
         return jsonify({
             'success': True,
             'current_path': str(path),
             'can_go_up': can_go_up,
-            'parent_path': str(parent) if can_go_up else None,
+            'parent_path': parent_path,
             'directories': directories
         })
     except PermissionError:

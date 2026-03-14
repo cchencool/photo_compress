@@ -119,10 +119,12 @@ class ImageCompressor:
 
             # 检查是否已压缩过
             if output_path.exists() and not self.no_skip:
-                self._log(f"⏭️ 已压缩，跳过：{file_path.name}")
-                self._processed_images.add(output_path)
                 with self._lock:
                     self._processed_count += 1
+                    current = self._processed_count
+                    total = self._total_files
+                self._log(f"⏭️ 已压缩，跳过：{file_path.name} [{current}/{total}]")
+                self._processed_images.add(output_path)
                 return True
 
             # 确保输出目录存在
@@ -138,26 +140,32 @@ class ImageCompressor:
             ]
 
             result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            self._log(f"✅ 成功压缩：{file_path.name}")
-
-            # 记录已处理文件
-            self._processed_images.add(output_path)
             with self._lock:
                 self._processed_count += 1
                 self._success_count += 1
+                current = self._processed_count
+                total = self._total_files
+            self._log(f"✅ 成功压缩：{file_path.name} [{current}/{total}]")
+
+            # 记录已处理文件
+            self._processed_images.add(output_path)
             return True
 
         except subprocess.CalledProcessError as e:
-            self._log(f"❌ 压缩失败：{file_path.name} - 错误：{e.stderr}")
             with self._lock:
                 self._processed_count += 1
                 self._failed_count += 1
+                current = self._processed_count
+                total = self._total_files
+            self._log(f"❌ 压缩失败：{file_path.name} - 错误：{e.stderr} [{current}/{total}]")
             return False
         except Exception as e:
-            self._log(f"⚠️ 处理错误：{file_path.name} - 原因：{str(e)}")
             with self._lock:
                 self._processed_count += 1
                 self._failed_count += 1
+                current = self._processed_count
+                total = self._total_files
+            self._log(f"⚠️ 处理错误：{file_path.name} - 原因：{str(e)} [{current}/{total}]")
             return False
 
     def start(self) -> bool:
