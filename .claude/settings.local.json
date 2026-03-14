@@ -4,7 +4,23 @@
       "Bash(git init:*)",
       "Bash(git branch:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker:*)",
+      "Bash(echo:*)",
+      "Bash(sudo docker:*)",
+      "Bash(docker-compose ps:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(pip3 install:*)",
+      "Bash(docker run:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr:*)",
+      "Bash(git checkout:*)",
+      "Bash(sleep:*)",
+      "Bash(curl:*)",
+      "Bash(git merge:*)"
     ]
   }
 }
