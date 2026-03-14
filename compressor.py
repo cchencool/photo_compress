@@ -166,9 +166,8 @@ class ImageCompressor:
             if self._is_running:
                 self._log("⚠️ 已有压缩任务正在运行")
                 return False
-
-        self._stop_flag = False
-        self._is_running = True
+            self._stop_flag = False
+            self._is_running = True
 
         # 创建输出目录
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -179,11 +178,15 @@ class ImageCompressor:
 
         # 查找所有图片文件
         image_files = self._find_image_files()
-        self._total_files = len(image_files)
+
+        # 在锁的保护下设置总数
+        with self._lock:
+            self._total_files = len(image_files)
 
         if not image_files:
             self._log(f"⚠️ 未找到以 '{self.prefix}' 开头的图片文件")
-            self._is_running = False
+            with self._lock:
+                self._is_running = False
             return False
 
         self._log(f"🔍 找到 {self._total_files} 个符合条件的图片文件")
@@ -211,7 +214,8 @@ class ImageCompressor:
                         self._log(f"🔥 处理异常：{str(e)}")
         finally:
             self._executor = None
-            self._is_running = False
+            with self._lock:
+                self._is_running = False
 
         # 计算处理时间
         duration = datetime.now() - start_time
@@ -238,19 +242,26 @@ class ImageCompressor:
 
     def get_progress(self) -> Dict[str, Any]:
         """获取当前进度"""
+        # 使用锁保护读取，确保数据一致性
         with self._lock:
-            percentage = 0
-            if self._total_files > 0:
-                percentage = round(self._processed_count / self._total_files * 100, 1)
+            is_running = self._is_running
+            total_files = self._total_files
+            processed_count = self._processed_count
+            success_count = self._success_count
+            failed_count = self._failed_count
 
-            return {
-                "is_running": self._is_running,
-                "total_files": self._total_files,
-                "processed_count": self._processed_count,
-                "success_count": self._success_count,
-                "failed_count": self._failed_count,
-                "percentage": percentage
-            }
+        percentage = 0
+        if total_files > 0:
+            percentage = round(processed_count / total_files * 100, 1)
+
+        return {
+            "is_running": is_running,
+            "total_files": total_files,
+            "processed_count": processed_count,
+            "success_count": success_count,
+            "failed_count": failed_count,
+            "percentage": percentage
+        }
 
     def get_logs(self, start_line: int = 0) -> list[str]:
         """获取日志"""

@@ -214,7 +214,6 @@ function startSSEListeners() {
     logSource.onmessage = function(event) {
         if (event.data === '__END__') {
             logSource.close();
-            setRunningState(false);
             return;
         }
         addLog(event.data);
@@ -225,19 +224,28 @@ function startSSEListeners() {
         logSource.close();
     };
 
-    // 监听进度
+    // 监听进度 - 使用单独的 SSE 连接
     progressSource = new EventSource('/api/progress');
+    let lastProgressJson = '';
+
     progressSource.onmessage = function(event) {
         try {
             const progress = JSON.parse(event.data);
             updateProgress(progress);
+
+            // 调试：输出进度变化
+            const currentJson = JSON.stringify(progress);
+            if (currentJson !== lastProgressJson) {
+                console.log('进度更新:', progress);
+                lastProgressJson = currentJson;
+            }
 
             if (!progress.is_running) {
                 progressSource.close();
                 setRunningState(false);
             }
         } catch (e) {
-            console.error('解析进度失败:', e);
+            console.error('解析进度失败:', e, '原始数据:', event.data);
         }
     };
 
