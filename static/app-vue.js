@@ -126,10 +126,10 @@ createApp({
             }
         };
 
-        // 从日志中解析进度信息
+        // 从日志中解析进度信息（仅更新进度条，不更新成功/失败计数）
         const parseProgressFromLog = (log) => {
-            // 匹配格式：[xxx] [数字/数字]
-            const match = log.match(/\\[(\\d+)\\/(\\d+)\\]/);
+            // 匹配格式：[数字/数字]
+            const match = log.match(/\[(\d+)\/(\d+)\]/);
             if (match) {
                 const current = parseInt(match[1]);
                 const total = parseInt(match[2]);
@@ -139,14 +139,7 @@ createApp({
                     progress.percentage = Math.round(current / total * 1000) / 10;
                 }
             }
-            // 匹配成功计数
-            if (log.includes('✅')) {
-                progress.success_count++;
-            }
-            // 匹配失败计数
-            if (log.includes('❌') || log.includes('⚠️')) {
-                progress.failed_count++;
-            }
+            // 成功/失败计数完全依赖 SSE 进度接口，不再从日志解析
         };
 
         // 启动 SSE 监听
@@ -174,20 +167,18 @@ createApp({
                 logSource.close();
             };
 
-            // 监听进度 - 作为备用方案
+            // 监听进度 - 作为主要方案
             progressSource = new EventSource('/api/progress');
             progressSource.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    // 只有当日志解析失败时才使用 SSE 进度
-                    if (progress.total_files === 0 && data.total_files > 0) {
-                        progress.is_running = data.is_running;
-                        progress.total_files = data.total_files;
-                        progress.processed_count = data.processed_count;
-                        progress.success_count = data.success_count;
-                        progress.failed_count = data.failed_count;
-                        progress.percentage = data.percentage;
-                    }
+                    // 直接使用 SSE 进度数据
+                    progress.is_running = data.is_running;
+                    progress.total_files = data.total_files;
+                    progress.processed_count = data.processed_count;
+                    progress.success_count = data.success_count;
+                    progress.failed_count = data.failed_count;
+                    progress.percentage = data.percentage;
 
                     // 当任务不再运行时，重置状态
                     if (!data.is_running && isRunning.value) {

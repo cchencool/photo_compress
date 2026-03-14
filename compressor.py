@@ -10,8 +10,56 @@ import re
 import threading
 import queue
 import logging
+import multiprocessing
 from datetime import datetime
 from typing import Optional, Set, Dict, Any
+
+
+def run_compression_task(input_dir, output_dir, jobs, prefix, no_skip, status_dict, log_queue):
+    """
+    在独立进程中运行的压缩任务函数
+
+    使用 multiprocessing 启动独立进程来执行压缩，支持通过进程终止来中断 magick 子进程
+    """
+    compressor = ImageCompressor(input_dir, output_dir, jobs, prefix, no_skip)
+
+    # 重写日志方法，发送到多进程队列
+    def send_log(message):
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        log_msg = f"[{timestamp}] {message}"
+        log_queue.put(log_msg)
+        compressor._log_history.append(log_msg)
+        # 限制历史记录长度
+        if len(compressor._log_history) > compressor._max_log_lines:
+            compressor._log_history.pop(0)
+
+    compressor._log = send_log
+
+    # 重写 get_progress 方法，实时更新共享状态字典
+    original_get_progress = compressor.get_progress
+    def update_status_dict():
+        progress = original_get_progress()
+        status_dict.update(progress)
+        status_dict['is_running'] = True
+
+    # 保存原始 _compress_image 方法
+    original_compress_image = compressor._compress_image
+
+    # 重写 _compress_image 方法，每次处理后更新共享状态
+    def wrapped_compress_image(file_path):
+        result = original_compress_image(file_path)
+        update_status_dict()
+        return result
+
+    compressor._compress_image = wrapped_compress_image
+
+    try:
+        status_dict['is_running'] = True
+        compressor.start()
+        # 更新最终状态
+        update_status_dict()
+    finally:
+        status_dict['is_running'] = False
 
 
 class ImageCompressor:
@@ -210,7 +258,8 @@ class ImageCompressor:
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
                 self._executor = executor
-                futures = [executor.submit(self._compress_image, f) for f in image_files]
+                # 使用 lambda 包装，确保调用时绑定的是当前 self._compress_image
+                futures = [executor.submit(lambda f: self._compress_image(f), f) for f in image_files]
 
                 for future in concurrent.futures.as_completed(futures):
                     if self._stop_flag:

@@ -1,4 +1,4 @@
-# 图片压缩工具 v1.1
+# 图片压缩工具 v1.3
 
 使用 ImageMagick 进行批量图片压缩的 Python 工具，支持 CLI 和 Web 管理后台两种使用方式。
 
@@ -12,6 +12,10 @@
 - 质量可配置（默认 80%）
 - 详细的日志输出
 - **Web 管理后台**：实时进度、日志查看、任务中断
+- **v1.2 新增**：Vue 3 前端，更现代化的界面
+- **v1.3 修复**：
+  - 修复成功/失败统计未实时更新的问题
+  - 修复点击停止后服务卡死的问题（改用独立进程管理）
 
 ## 环境要求
 
@@ -48,7 +52,7 @@ python compress_image.py -i <输入目录> -o <输出目录>
 
 ```bash
 python web.py
-# 访问 http://localhost:5000
+# 访问 http://localhost:5555
 ```
 
 ### 完整参数
@@ -115,7 +119,7 @@ docker pull cchencool/photo-compressor:latest
 
 ```bash
 docker run --rm -d \
-  -p 5000:5000 \
+  -p 5555:5555 \
   -v /path/to/input:/photos:ro \
   -v /path/to/output:/output \
   -e DEFAULT_INPUT_DIR=/photos \
@@ -123,7 +127,7 @@ docker run --rm -d \
   cchencool/photo-compressor:latest
 ```
 
-访问 `http://localhost:5000` 使用 Web 管理后台。
+访问 `http://localhost:5555` 使用 Web 管理后台。
 
 ### CLI 模式运行
 
@@ -141,7 +145,7 @@ docker run --rm \
 # 启动 Web 服务
 docker-compose up -d
 
-# 访问 http://localhost:5000
+# 访问 http://localhost:5555
 
 # 查看日志
 docker-compose logs -f
@@ -159,16 +163,42 @@ photo_compress/
 ├── compress_image.py      # CLI 入口（兼容旧版）
 ├── requirements.txt       # Python 依赖
 ├── templates/
-│   └── index.html        # 管理后台页面
+│   ├── index.html        # 管理后台页面 (旧版)
+│   └── index-vue.html    # Vue 3 管理后台页面
 ├── static/
 │   ├── style.css         # 样式
-│   └── script.js         # 前端逻辑
+│   ├── script.js         # 前端逻辑 (旧版)
+│   └── app-vue.js        # Vue 3 前端应用
 ├── Dockerfile             # Docker 镜像配置
 ├── docker-compose.yml     # Docker Compose 配置
+├── CLAUDE.md              # Claude 项目说明
 └── README.md              # 项目说明
 ```
 
 ## 架构设计
+
+### v1.3 架构（多进程模式）
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Docker Container                      │
+│  ┌─────────────┐    ┌──────────────┐    ┌────────────┐  │
+│  │   Flask     │◄──►│ Compression  │◄──►│ ImageMagick│  │
+│  │   Web Server│    │   Process    │    │   (magick) │  │
+│  └──────┬──────┘    └──────┬───────┘    └────────────┘  │
+│         │                  │                              │
+│  ┌──────▼──────┐    ┌──────▼───────┐                     │
+│  │   Static    │    │   Manager    │                     │
+│  │  (Vue 3)    │    │   Dict/Queue │                     │
+│  └─────────────┘    └──────────────┘                     │
+└─────────────────────────────────────────────────────────┘
+                          ▲
+                          │ HTTP/SSE
+                          │
+                    用户浏览器
+```
+
+### v1.1-v1.2 架构（线程池模式）
 
 ```
 ┌─────────────────────────────────────────────────────────┐

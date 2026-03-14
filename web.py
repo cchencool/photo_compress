@@ -4,15 +4,20 @@ Flask Web 应用入口
 """
 import os
 import threading
+import multiprocessing
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, Response
-from compressor import ImageCompressor
+from compressor import ImageCompressor, run_compression_task
 import time
+import queue
 
 app = Flask(__name__)
 
-# 全局压缩器实例
-compressor: ImageCompressor = None
+# 全局压缩进程状态
+compressor_process: multiprocessing.Process = None
+status_manager = multiprocessing.Manager()
+status_dict = multiprocessing.Manager().dict()
+log_queue = multiprocessing.Queue()
 compressor_lock = threading.Lock()
 
 # 从环境变量读取默认路径
@@ -34,16 +39,17 @@ def index():
 @app.route('/api/status')
 def api_status():
     """获取当前状态"""
-    global compressor
+    global compressor_process
 
     with compressor_lock:
-        if compressor is None or not compressor.is_running:
+        if compressor_process is None or not compressor_process.is_alive():
             return jsonify({
                 'status': 'idle',
                 'message': '空闲'
             })
 
-        progress = compressor.get_progress()
+        # 从共享状态字典读取进度
+        progress = dict(status_dict) if status_dict else {}
         return jsonify({
             'status': 'running',
             'message': '压缩中',
@@ -54,44 +60,46 @@ def api_status():
 @app.route('/api/start', methods=['POST'])
 def api_start():
     """开始压缩任务"""
-    global compressor
+    global compressor_process
 
     data = request.get_json() or {}
     input_dir = data.get('input_dir', DEFAULT_INPUT_DIR)
     output_dir = data.get('output_dir', DEFAULT_OUTPUT_DIR)
-    jobs = data.get('jobs', 4)
+    jobs = int(data.get('jobs', 4))
     prefix = data.get('prefix', 'DSC')
     no_skip = data.get('no_skip', False)
 
     with compressor_lock:
         # 检查是否已有任务运行
-        if compressor is not None and compressor.is_running:
+        if compressor_process is not None and compressor_process.is_alive():
             return jsonify({
                 'success': False,
                 'message': '已有压缩任务正在运行'
             }), 400
 
-        # 创建新的压缩器实例
-        compressor = ImageCompressor(
-            input_dir=input_dir,
-            output_dir=output_dir,
-            jobs=jobs,
-            prefix=prefix,
-            no_skip=no_skip
-        )
+        # 重置共享状态
+        status_dict.clear()
+        status_dict['is_running'] = False
+        status_dict['total_files'] = 0
+        status_dict['processed_count'] = 0
+        status_dict['success_count'] = 0
+        status_dict['failed_count'] = 0
+        status_dict['percentage'] = 0
 
-        # 在新线程中启动压缩任务
-        def run_compression():
+        # 清空旧日志队列
+        while not log_queue.empty():
             try:
-                compressor.start()
-            except Exception as e:
-                compressor._log(f"❌ 压缩任务异常：{str(e)}")
-            finally:
-                with compressor_lock:
-                    pass  # 保持实例以显示最终状态
+                log_queue.get_nowait()
+            except queue.Empty:
+                break
 
-        thread = threading.Thread(target=run_compression, daemon=True)
-        thread.start()
+        # 启动独立进程
+        compressor_process = multiprocessing.Process(
+            target=run_compression_task,
+            args=(input_dir, output_dir, jobs, prefix, no_skip, status_dict, log_queue),
+            daemon=True
+        )
+        compressor_process.start()
 
         return jsonify({
             'success': True,
@@ -102,49 +110,49 @@ def api_start():
 @app.route('/api/stop', methods=['POST'])
 def api_stop():
     """停止压缩任务"""
-    global compressor
+    global compressor_process
 
     with compressor_lock:
-        if compressor is None or not compressor.is_running:
+        if compressor_process is None or not compressor_process.is_alive():
             return jsonify({
                 'success': False,
                 'message': '没有正在运行的任务'
             }), 400
 
-        compressor.stop()
-        return jsonify({
-            'success': True,
-            'message': '已发送停止信号'
-        })
+        # 强制终止进程
+        compressor_process.terminate()
+        compressor_process.join(timeout=3)
+        if compressor_process.is_alive():
+            # 如果 SIGTERM 无效，使用 SIGKILL 强制杀死
+            compressor_process.kill()
+            compressor_process.join(timeout=1)
+
+        # 等待一小段时间确保进程完全退出
+        time.sleep(0.5)
+
+    return jsonify({
+        'success': True,
+        'message': '已发送停止信号'
+    })
 
 
 @app.route('/api/logs')
 def api_logs():
-    """SSE 日志推送"""
-    global compressor
-
+    """SSE 日志推送 - 从多进程队列读取日志"""
     def generate():
-        last_line = 0
         while True:
-            with compressor_lock:
-                if compressor is None:
-                    logs = []
-                    is_running = False
-                else:
-                    logs = compressor.get_logs(last_line)
-                    is_running = compressor.is_running
-
-            if logs:
-                for log in logs:
-                    yield f"data: {log}\n\n"
-                last_line += len(logs)
-
-            if not is_running and not logs:
-                # 任务完成且无新日志，发送结束标记
-                yield "data: __END__\n\n"
-                break
-
-            time.sleep(0.5)
+            try:
+                # 从多进程队列获取日志
+                log = log_queue.get(timeout=0.5)
+                yield f"data: {log}\n\n"
+            except queue.Empty:
+                # 检查进程状态
+                with compressor_lock:
+                    if compressor_process is None or not compressor_process.is_alive():
+                        # 任务完成且无新日志，发送结束标记
+                        yield "data: __END__\n\n"
+                        break
+                time.sleep(0.1)
 
     return Response(
         generate(),
@@ -159,13 +167,11 @@ def api_logs():
 
 @app.route('/api/progress')
 def api_progress():
-    """SSE 进度推送"""
-    global compressor
-
+    """SSE 进度推送 - 从共享状态字典读取"""
     def generate():
         while True:
             with compressor_lock:
-                if compressor is None:
+                if compressor_process is None or not compressor_process.is_alive():
                     progress = {
                         'is_running': False,
                         'total_files': 0,
@@ -175,11 +181,11 @@ def api_progress():
                         'percentage': 0
                     }
                 else:
-                    progress = compressor.get_progress()
+                    progress = dict(status_dict)
 
             yield f"data: {progress}\n\n"
 
-            if not progress['is_running']:
+            if not progress.get('is_running', False):
                 break
 
             time.sleep(0.5)
@@ -266,4 +272,4 @@ def api_current_path():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5555, debug=False)
