@@ -13,14 +13,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 设置工作目录
 WORKDIR /app
 
-# 复制脚本
-COPY compress_image.py .
+# 复制依赖文件并安装
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 复制应用代码
+COPY compress_image.py compressor.py web.py ./
+COPY templates/ ./templates/
+COPY static/ ./static/
 
 # 创建日志目录并赋予写权限
 RUN mkdir -p /logs
 
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1
+ENV DEFAULT_INPUT_DIR=/photos
+ENV DEFAULT_OUTPUT_DIR=/output
 
-# 入口点
-ENTRYPOINT ["python", "compress_image.py"]
+# 暴露 Web 端口
+EXPOSE 5000
+
+# 入口点 - Flask Web 应用
+ENTRYPOINT ["python", "web.py"]

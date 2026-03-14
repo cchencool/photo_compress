@@ -2,6 +2,9 @@ services:
   photo-compressor:
     build: .
     container_name: photo-compressor
+    ports:
+      # Web 管理后台端口
+      - "5000:5000"
     volumes:
       # 挂载照片目录
       - /home/chen/Pictures:/photos:ro
@@ -10,7 +13,10 @@ services:
       # 挂载日志目录
       - ./logs:/logs
     environment:
+      # 默认输入/输出路径（可在 Web 界面修改）
+      - DEFAULT_INPUT_DIR=/photos
+      - DEFAULT_OUTPUT_DIR=/output
       # 可选：设置日志级别
       - LOG_LEVEL=INFO
-    # 默认命令，可通过 docker-compose run 覆盖
-    command: -i /photos -o /output -j 4 --prefix DSC
+    # 重启策略
+    restart: unless-stopped

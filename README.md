@@ -1,6 +1,6 @@
-# 图片压缩工具
+# 图片压缩工具 v1.1
 
-使用 ImageMagick 进行批量图片压缩的 Python CLI 工具，支持多线程并行处理。
+使用 ImageMagick 进行批量图片压缩的 Python 工具，支持 CLI 和 Web 管理后台两种使用方式。
 
 ## 功能特点
 
@@ -11,11 +11,13 @@
 - 自动跳过已压缩文件
 - 质量可配置（默认 80%）
 - 详细的日志输出
+- **Web 管理后台**：实时进度、日志查看、任务中断
 
 ## 环境要求
 
 - Python 3.x
 - ImageMagick (`magick` 命令需在 PATH 中)
+- Flask (Web 模式)
 
 ## 安装依赖
 
@@ -29,14 +31,24 @@ brew install imagemagick
 
 # CentOS/RHEL
 sudo yum install ImageMagick
+
+# 安装 Python 依赖（Web 模式）
+pip install -r requirements.txt
 ```
 
 ## 使用方法
 
-### 基本用法
+### CLI 模式
 
 ```bash
 python compress_image.py -i <输入目录> -o <输出目录>
+```
+
+### Web 模式
+
+```bash
+python web.py
+# 访问 http://localhost:5000
 ```
 
 ### 完整参数
@@ -67,9 +79,29 @@ python compress_image.py -i ./photos -o ./output -j 8
 # 压缩特定前缀的图片
 python compress_image.py -i ./photos -o ./output --prefix IMG
 
-# 压缩所有图片（不限制前缀）
-python compress_image.py -i ./photos -o ./output --prefix ""
+# 启动 Web 管理后台
+python web.py
 ```
+
+## Web 管理后台
+
+### 功能
+
+- 自定义输入/输出路径
+- 实时进度显示（百分比、已处理数/总数）
+- 实时日志推送（SSE）
+- 任务中断控制
+
+### API 接口
+
+| 接口 | 方法 | 描述 |
+|------|------|------|
+| `/` | GET | 管理后台首页 |
+| `/api/status` | GET | 获取当前状态 |
+| `/api/start` | POST | 开始压缩任务 |
+| `/api/stop` | POST | 停止压缩任务 |
+| `/api/logs` | GET (SSE) | 实时日志推送 |
+| `/api/progress` | GET (SSE) | 实时进度推送 |
 
 ## Docker 部署
 
@@ -79,7 +111,21 @@ python compress_image.py -i ./photos -o ./output --prefix ""
 docker pull cchencool/photo-compressor:latest
 ```
 
-### 运行容器
+### Web 模式运行
+
+```bash
+docker run --rm -d \
+  -p 5000:5000 \
+  -v /path/to/input:/photos:ro \
+  -v /path/to/output:/output \
+  -e DEFAULT_INPUT_DIR=/photos \
+  -e DEFAULT_OUTPUT_DIR=/output \
+  cchencool/photo-compressor:latest
+```
+
+访问 `http://localhost:5000` 使用 Web 管理后台。
+
+### CLI 模式运行
 
 ```bash
 docker run --rm \
@@ -91,21 +137,57 @@ docker run --rm \
 
 ### 使用 docker-compose
 
-1. 编辑 `docker-compose.yml`，修改 volumes 路径为实际路径
-2. 运行：
-
 ```bash
-# 构建并运行
-docker-compose up --build
-
-# 后台运行
+# 启动 Web 服务
 docker-compose up -d
+
+# 访问 http://localhost:5000
 
 # 查看日志
 docker-compose logs -f
+
+# 停止服务
+docker-compose down
 ```
 
-详见 [README.Docker.md](README.Docker.md)
+## 项目结构
+
+```
+photo_compress/
+├── compressor.py          # 压缩核心类
+├── web.py                 # Flask Web 应用
+├── compress_image.py      # CLI 入口（兼容旧版）
+├── requirements.txt       # Python 依赖
+├── templates/
+│   └── index.html        # 管理后台页面
+├── static/
+│   ├── style.css         # 样式
+│   └── script.js         # 前端逻辑
+├── Dockerfile             # Docker 镜像配置
+├── docker-compose.yml     # Docker Compose 配置
+└── README.md              # 项目说明
+```
+
+## 架构设计
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Docker Container                      │
+│  ┌─────────────┐    ┌──────────────┐    ┌────────────┐  │
+│  │   Flask     │◄──►│   Compression │◄──►│ ImageMagick│  │
+│  │   Web Server│    │    Manager    │    │   (magick) │  │
+│  └──────┬──────┘    └──────┬───────┘    └────────────┘  │
+│         │                  │                              │
+│  ┌──────▼──────┐    ┌──────▼───────┐                     │
+│  │   Static    │    │   SSE        │                     │
+│  │    Files    │    │   Push       │                     │
+│  └─────────────┘    └──────────────┘                     │
+└─────────────────────────────────────────────────────────┘
+                          ▲
+                          │ HTTP/SSE
+                          │
+                    用户浏览器
+```
 
 ## 输出说明
 
@@ -113,17 +195,7 @@ docker-compose logs -f
 - 日志输出到：
   - 控制台
   - `image_compressor.log` 文件
-
-## 项目结构
-
-```
-photo_compress/
-├── compress_image.py      # 主程序
-├── Dockerfile             # Docker 镜像配置
-├── docker-compose.yml     # Docker Compose 配置
-├── README.md              # 项目说明
-└── README.Docker.md       # Docker 部署说明
-```
+  - Web 管理后台（实时）
 
 ## License
 
