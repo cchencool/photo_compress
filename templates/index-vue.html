@@ -2,15 +2,19 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>图片压缩工具 v1.3 - 管理后台</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>图片压缩工具 v1.4 - 管理后台</title>
     <link rel="stylesheet" href="/static/style.css">
+    <!-- iOS Safari 全屏支持 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
 </head>
 <body>
     {% raw %}
     <div id="app" class="container">
         <header>
-            <h1>🖼️ 图片压缩工具 <span class="version">v1.3</span></h1>
+            <h1>🖼️ 图片压缩工具 <span class="version">v1.4</span></h1>
             <p class="subtitle">Web 管理后台 (Vue 版)</p>
         </header>
 
@@ -144,7 +148,11 @@
             </section>
 
             <!-- 日志区域 -->
-            <section class="log-section">
+            <section
+                class="log-section"
+                @touchstart="handleTouchStart"
+                @touchend="handleTouchEnd($event, (dir) => {})"
+            >
                 <h2>📝 日志输出</h2>
                 <div class="log-container" ref="logContainer">
                     <div v-if="logs.length === 0" class="log-empty">
@@ -223,7 +231,7 @@
         </main>
 
         <footer>
-            <p>图片压缩工具 v1.3 | Powered by Vue 3 + Flask + ImageMagick</p>
+            <p>图片压缩工具 v1.4 | Powered by Vue 3 + Flask + ImageMagick</p>
         </footer>
     </div>
     {% endraw %}

@@ -40,12 +40,55 @@ createApp({
             parentPath: null,
             canGoUp: false,
             selectedPath: null,
-            directories: []
+            directories: [],
+            sortOrder: 'desc'  // 'asc' 或 'desc'，默认倒序
         });
 
         // SSE 连接
         let logSource = null;
         let progressSource = null;
+        let sseRetryCount = 0;
+        const SSE_MAX_RETRIES = 5;
+        const SSE_RETRY_DELAY = 3000;
+
+        // 显示 Toast 提示
+        const showToast = (message, type = 'info') => {
+            const existingToast = document.querySelector('.toast');
+            if (existingToast) {
+                existingToast.remove();
+            }
+
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            // 触发动画
+            requestAnimationFrame(() => {
+                toast.classList.add('show');
+            });
+
+            // 自动隐藏
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        };
+
+        // 重建 SSE 连接
+        const reconnectSSE = () => {
+            if (sseRetryCount < SSE_MAX_RETRIES && isRunning.value) {
+                sseRetryCount++;
+                console.log(`SSE 重连尝试 ${sseRetryCount}/${SSE_MAX_RETRIES}`);
+                showToast(`网络不稳定，正在重连... (${sseRetryCount}/${SSE_MAX_RETRIES})`, 'info');
+
+                setTimeout(() => {
+                    startSSEListeners();
+                }, SSE_RETRY_DELAY);
+            } else if (isRunning.value) {
+                showToast('网络连接中断，请刷新页面', 'error');
+            }
+        };
 
         // 滚动日志到底部
         const scrollToBottom = async () => {
@@ -82,7 +125,7 @@ createApp({
         // 开始压缩
         const startCompression = async () => {
             if (!config.input_dir || !config.output_dir) {
-                alert('请输入输入目录和输出目录');
+                showToast('请输入输入目录和输出目录', 'error');
                 return;
             }
 
@@ -101,12 +144,13 @@ createApp({
                     isRunning.value = true;
                     startSSEListeners();
                     await scrollToBottom();
+                    showToast('压缩任务已启动', 'success');
                 } else {
-                    alert(data.message || '启动失败');
+                    showToast(data.message || '启动失败', 'error');
                 }
             } catch (error) {
                 console.error('启动压缩失败:', error);
-                alert('启动压缩失败：' + error.message);
+                showToast('启动压缩失败：' + error.message, 'error');
             }
         };
 
@@ -148,6 +192,9 @@ createApp({
             if (logSource) logSource.close();
             if (progressSource) progressSource.close();
 
+            // 重置重连计数
+            sseRetryCount = 0;
+
             // 监听日志
             logSource = new EventSource('/api/logs');
             logSource.onmessage = (event) => {
@@ -165,6 +212,7 @@ createApp({
             logSource.onerror = () => {
                 console.error('日志 SSE 连接错误');
                 logSource.close();
+                reconnectSSE();
             };
 
             // 监听进度 - 作为主要方案
@@ -192,6 +240,7 @@ createApp({
             };
             progressSource.onerror = () => {
                 console.error('进度 SSE 连接错误');
+                reconnectSSE();
             };
         };
 
@@ -207,7 +256,7 @@ createApp({
         // 加载目录列表
         const loadDirectories = async (path) => {
             try {
-                const response = await fetch(`/api/directories?path=${encodeURIComponent(path)}`);
+                const response = await fetch(`/api/directories?path=${encodeURIComponent(path)}&sort=${modal.sortOrder}`);
                 const data = await response.json();
                 if (data.success) {
                     modal.currentPath = data.current_path;
@@ -221,6 +270,13 @@ createApp({
                 console.error('加载目录失败:', error);
                 modal.directories = [];
             }
+        };
+
+        // 切换排序顺序
+        const toggleSort = () => {
+            modal.sortOrder = modal.sortOrder === 'asc' ? 'desc' : 'asc';
+            // 重新加载当前目录列表，应用新的排序
+            loadDirectories(modal.currentPath);
         };
 
         // 选择或导航到目录
@@ -256,6 +312,19 @@ createApp({
             modal.selectedPath = null;
         };
 
+        // 触摸滑动支持
+        const touchStartX = ref(0);
+        const handleTouchStart = (event) => {
+            touchStartX.value = event.touches[0].clientX;
+        };
+
+        const handleTouchEnd = (event, callback) => {
+            const diffX = event.changedTouches[0].clientX - touchStartX.value;
+            if (Math.abs(diffX) > 50) {
+                callback(diffX > 0 ? 'right' : 'left');
+            }
+        };
+
         // 挂载时初始化
         onMounted(() => {
             checkStatus();
@@ -277,7 +346,11 @@ createApp({
             loadDirectories,
             selectOrNavigate,
             navigateTo,
-            confirmDirectory
+            confirmDirectory,
+            toggleSort,
+            showToast,
+            handleTouchStart,
+            handleTouchEnd
         };
     }
 }).mount('#app');
