@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>图片压缩工具 v1.2 - 管理后台</title>
+    <title>图片压缩工具 v1.3 - 管理后台</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     {% raw %}
     <div id="app" class="container">
         <header>
-            <h1>🖼️ 图片压缩工具 <span class="version">v1.2</span></h1>
+            <h1>🖼️ 图片压缩工具 <span class="version">v1.3</span></h1>
             <p class="subtitle">Web 管理后台 (Vue 版)</p>
         </header>
 
@@ -171,6 +171,12 @@
                 <div class="modal-content">
                     <div class="modal-header">
                         <h3>选择<span v-text="modal.target === 'input' ? '输入' : '输出'"></span>目录</h3>
+                        <div class="modal-actions">
+                            <button class="btn-sort" @click="toggleSort" title="切换排序">
+                                <span class="sort-icon">{{ modal.sortOrder === 'asc' ? '↑' : '↓' }}</span>
+                                <span class="sort-text">{{ modal.sortOrder === 'asc' ? '正序' : '倒序' }}</span>
+                            </button>
+                        </div>
                         <button class="modal-close" @click="closeModal">&times;</button>
                     </div>
                     <div class="modal-body">
@@ -217,7 +223,7 @@
         </main>
 
         <footer>
-            <p>图片压缩工具 v1.2 | Powered by Vue 3 + Flask + ImageMagick</p>
+            <p>图片压缩工具 v1.3 | Powered by Vue 3 + Flask + ImageMagick</p>
         </footer>
     </div>
     {% endraw %}

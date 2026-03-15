@@ -4,7 +4,7 @@ services:
     container_name: photo-compressor
     ports:
       # Web 管理后台端口
-      - "5000:5000"
+      - "5555:5555"
     volumes:
       # 挂载照片目录
       - /home/chen/Pictures:/photos:ro
