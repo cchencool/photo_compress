@@ -935,99 +935,79 @@ footer {
         padding: 8px 12px;
         word-break: break-all;
     }
-}
 
-/* 超小屏幕 - < 360px */
-@media (max-width: 360px) {
-    header h1 {
-        font-size: 1.15em;
+    /* 防止 iOS 长按选中 */
+    body {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
     }
 
-    header h1 .version {
-        display: none;
+    /* 输入框和日志区域允许选中 */
+    input,
+    textarea,
+    .log-container,
+    .path-nav {
+        -webkit-user-select: auto;
+        user-select: auto;
     }
 
-    .subtitle {
-        font-size: 0.85em;
+    /* 按钮按压反馈 */
+    .btn-primary:active:not(:disabled) {
+        transform: scale(0.98);
+        opacity: 0.9;
     }
 
-    .btn {
-        font-size: 1em;
+    .btn-danger:active:not(:disabled) {
+        transform: scale(0.98);
+        opacity: 0.9;
     }
 
-    .stats {
-        grid-template-columns: 1fr;
-        gap: 8px;
+    .btn-secondary:active {
+        transform: scale(0.98);
+        opacity: 0.8;
     }
 
-    .stat-item {
-        display: flex;
-        justify-content: space-between;
-        padding: 8px 12px;
-        background: #f8f9fa;
-        border-radius: 6px;
+    .btn-browse:active {
+        background: #3498db;
+        border-color: #2980b9;
     }
 
-    .stat-item strong {
-        font-size: 1.2em;
-    }
-}
-
-/* 横屏模式优化 */
-@media (max-height: 500px) and (orientation: landscape) {
-    .modal-content {
-        max-height: 90vh;
+    .dir-item:active {
+        background: #ccebff;
+        border-color: #2980b9;
+        transform: scale(0.98);
     }
 
-    .modal-body {
-        max-height: 50vh;
+    .toast {
+        bottom: 15px;
+        padding: 14px 20px;
+        font-size: 0.9em;
     }
 
-    .log-container {
-        height: 25vh;
-    }
-
-    main {
-        padding: 10px;
-    }
-
-    section {
-        margin-bottom: 15px;
+    .btn.loading::after {
+        width: 18px;
+        height: 18px;
+        border-width: 2px;
     }
 }
 
-/* 旧版响应式保持 */
-@media (max-width: 600px) {
-    .container {
-        border-radius: 0;
+/* 安全区域适配 - iPhone 刘海屏 */
+@supports (padding: max(0px)) {
+    body {
+        padding-left: max(10px, env(safe-area-inset-left));
+        padding-right: max(10px, env(safe-area-inset-right));
     }
 
-    header h1 {
-        font-size: 1.5em;
+    header {
+        padding-left: max(15px, env(safe-area-inset-left));
+        padding-right: max(15px, env(safe-area-inset-right));
     }
 
-    .form-row {
-        grid-template-columns: 1fr;
-    }
-
-    .control-section {
-        flex-direction: column;
-    }
-
-    .btn {
-        width: 100%;
-    }
-
-    .progress-container {
-        flex-direction: column;
-    }
-
-    .progress-text {
-        text-align: center;
-    }
-
-    .stats {
-        flex-direction: column;
-        gap: 10px;
+    @media (max-width: 480px) {
+        main {
+            padding-left: max(15px, env(safe-area-inset-left));
+            padding-right: max(15px, env(safe-area-inset-right));
+        }
     }
 }

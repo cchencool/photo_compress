@@ -148,11 +148,7 @@
             </section>
 
             <!-- 日志区域 -->
-            <section
-                class="log-section"
-                @touchstart="handleTouchStart"
-                @touchend="handleTouchEnd($event, (dir) => {})"
-            >
+            <section class="log-section">
                 <h2>📝 日志输出</h2>
                 <div class="log-container" ref="logContainer">
                     <div v-if="logs.length === 0" class="log-empty">

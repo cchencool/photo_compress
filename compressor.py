@@ -1,6 +1,6 @@
 """
 图片压缩核心模块
-提供 ImageCompressor 类，支持可中断的并发压缩任务
+提供 ImageCompressor 类，支持可中断的并发压缩任务（多进程模式）
 """
 import os
 import subprocess
@@ -8,11 +8,10 @@ import concurrent.futures
 from pathlib import Path
 import re
 import threading
-import queue
 import logging
 import multiprocessing
 from datetime import datetime
-from typing import Optional, Set, Dict, Any
+from typing import Optional, Set, Dict, Any, Callable
 
 
 def run_compression_task(input_dir, output_dir, jobs, prefix, no_skip, status_dict, log_queue):
@@ -65,7 +64,7 @@ def run_compression_task(input_dir, output_dir, jobs, prefix, no_skip, status_di
 
 
 class ImageCompressor:
-    """图片压缩器类，支持多线程并发压缩和任务中断"""
+    """图片压缩器类，支持多进程并发压缩和任务中断"""
 
     def __init__(
         self,
@@ -73,7 +72,8 @@ class ImageCompressor:
         output_dir: str,
         jobs: int = 4,
         prefix: str = "DSC",
-        no_skip: bool = False
+        no_skip: bool = False,
+        log_callback: Optional[Callable[[str], None]] = None
     ):
         self.input_dir = Path(input_dir).resolve()
         # 自动使用输入目录的最后一级文件夹名作为输出子目录
@@ -95,48 +95,50 @@ class ImageCompressor:
         self._success_count = 0
         self._failed_count = 0
 
-        # 日志队列和列表
-        self._log_queue = queue.Queue()
+        # 日志列表
         self._log_history: list[str] = []
         self._max_log_lines = 1000  # 限制日志缓冲行数
+
+        # 日志回调函数（外部注入，用于多进程模式）
+        self._log_callback = log_callback
 
         # 已处理的文件集合
         self._processed_images: Set[Path] = set()
 
-        # 配置日志处理器，将日志发送到队列
+        # 配置日志处理器
         self._setup_logging()
 
     def _setup_logging(self):
-        """设置自定义日志处理器，将日志发送到队列"""
-        class QueueHandler(logging.Handler):
-            def __init__(self, log_queue, history_list, max_lines):
-                super().__init__()
-                self.log_queue = log_queue
-                self.history_list = history_list
-                self.max_lines = max_lines
+        """设置自定义日志处理器，将日志发送到专用 logger"""
+        # 创建专用 logger，避免污染根日志器
+        self._logger = logging.getLogger('photo_compressor')
+        self._logger.setLevel(logging.INFO)
 
-            def emit(self, record):
-                msg = self.format(record)
-                self.log_queue.put(msg)
-                self.history_list.append(msg)
-                # 限制历史记录长度
-                if len(self.history_list) > self.max_lines:
-                    self.history_list.pop(0)
+        # 清除已有的 handler（避免重复）
+        if self._logger.handlers:
+            self._logger.handlers.clear()
 
         # 创建处理器
-        handler = QueueHandler(self._log_queue, self._log_history, self._max_log_lines)
+        handler = logging.StreamHandler()
         handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
         handler.setLevel(logging.INFO)
 
-        # 添加到根日志器
-        logging.getLogger().addHandler(handler)
-        logging.getLogger().setLevel(logging.INFO)
+        # 添加到专用 logger
+        self._logger.addHandler(handler)
 
     def _log(self, message: str):
         """记录日志"""
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         log_msg = f"[{timestamp}] {message}"
-        self._log_queue.put(log_msg)
+
+        # 如果外部注入了日志回调（多进程模式），使用回调
+        if self._log_callback:
+            self._log_callback(log_msg)
+        else:
+            # 否则使用专用 logger
+            self._logger.info(log_msg)
+
+        # 始终保留历史记录
         with self._lock:
             self._log_history.append(log_msg)
             if len(self._log_history) > self._max_log_lines:
@@ -260,8 +262,8 @@ class ImageCompressor:
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
                 self._executor = executor
-                # 使用 lambda 包装，确保调用时绑定的是当前 self._compress_image
-                futures = [executor.submit(lambda f: self._compress_image(f), f) for f in image_files]
+                # 提交所有压缩任务
+                futures = [executor.submit(self._compress_image, f) for f in image_files]
 
                 for future in concurrent.futures.as_completed(futures):
                     if self._stop_flag:

@@ -1,6 +1,8 @@
 """
 Flask Web 应用入口
 提供图片压缩工具的 Web 管理后台
+
+注意：当前仅支持单 worker 模式，多 worker 模式下共享状态无法同步
 """
 import os
 import threading
@@ -14,6 +16,7 @@ import queue
 app = Flask(__name__)
 
 # 全局压缩进程状态
+# 注意：这些全局变量在单 worker 模式下工作，多 worker 模式需要改用 Redis 等外部存储
 compressor_process: multiprocessing.Process = None
 status_manager = multiprocessing.Manager()
 status_dict = multiprocessing.Manager().dict()
@@ -23,6 +26,23 @@ compressor_lock = threading.Lock()
 # 从环境变量读取默认路径
 DEFAULT_INPUT_DIR = os.environ.get('DEFAULT_INPUT_DIR', '/photos')
 DEFAULT_OUTPUT_DIR = os.environ.get('DEFAULT_OUTPUT_DIR', '/output')
+
+# 从环境变量读取允许的路径前缀（用于目录浏览权限控制）
+ALLOWED_PATH_PREFIXES = [
+    Path(prefix.strip())
+    for prefix in os.environ.get('ALLOWED_PATH_PREFIXES', '/photos,/output').split(',')
+]
+
+
+def make_error_response(message: str, error_code: str = 'UNKNOWN') -> tuple:
+    """统一错误响应格式"""
+    return jsonify({
+        'success': False,
+        'error': {
+            'code': error_code,
+            'message': message
+        }
+    })
 
 
 @app.route('/')
@@ -72,10 +92,7 @@ def api_start():
     with compressor_lock:
         # 检查是否已有任务运行
         if compressor_process is not None and compressor_process.is_alive():
-            return jsonify({
-                'success': False,
-                'message': '已有压缩任务正在运行'
-            }), 400
+            return make_error_response('已有压缩任务正在运行', 'TASK_ALREADY_RUNNING'), 400
 
         # 重置共享状态
         status_dict.clear()
@@ -114,10 +131,7 @@ def api_stop():
 
     with compressor_lock:
         if compressor_process is None or not compressor_process.is_alive():
-            return jsonify({
-                'success': False,
-                'message': '没有正在运行的任务'
-            }), 400
+            return make_error_response('没有正在运行的任务', 'NO_TASK_RUNNING'), 400
 
         # 强制终止进程
         compressor_process.terminate()
@@ -209,11 +223,7 @@ def api_directories():
     try:
         path = Path(base_path)
         if not path.exists():
-            return jsonify({
-                'success': False,
-                'error': '路径不存在',
-                'directories': []
-            })
+            return make_error_response('路径不存在', 'PATH_NOT_FOUND'), 404
 
         # 获取直接子目录
         subdirs = [d for d in path.iterdir() if d.is_dir()]
@@ -226,20 +236,25 @@ def api_directories():
                 'has_subdirs': any(d.is_dir() for d in subdir.iterdir())
             })
 
-        # 不允许返回挂载路径的上级目录
-        # 限制只能在 /photos 和 /output 目录下浏览
-        allowed_roots = [Path('/photos'), Path('/output')]
+        # 目录浏览权限控制
+        # 限制只能在允许的路径前缀下浏览
         can_go_up = False
         parent_path = None
 
-        if str(path) != '/' and path.parent in allowed_roots:
-            # 当前路径是 allowed_roots 的直接子目录，可以返回上级
-            can_go_up = True
-            parent_path = str(path.parent)
-        elif str(path) == '/' or path in allowed_roots:
-            # 已经是根目录或允许的根目录，不能继续向上
-            can_go_up = False
-        # 其他情况（更深层级），不允许返回上级
+        # 检查当前路径是否在允许的范围内
+        is_allowed = any(str(path).startswith(str(prefix)) for prefix in ALLOWED_PATH_PREFIXES)
+        if not is_allowed:
+            return make_error_response('无权访问该路径', 'PATH_NOT_ALLOWED'), 403
+
+        # 判断是否可以返回上级
+        if str(path) != '/':
+            # 当前路径不是根目录，检查上级是否在允许范围内
+            is_parent_allowed = any(
+                str(path.parent).startswith(str(prefix)) for prefix in ALLOWED_PATH_PREFIXES
+            )
+            if is_parent_allowed:
+                can_go_up = True
+                parent_path = str(path.parent)
 
         return jsonify({
             'success': True,
@@ -249,17 +264,9 @@ def api_directories():
             'directories': directories
         })
     except PermissionError:
-        return jsonify({
-            'success': False,
-            'error': '无权访问该路径',
-            'directories': []
-        }), 403
+        return make_error_response('无权访问该路径', 'PERMISSION_DENIED'), 403
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'directories': []
-        }), 500
+        return make_error_response(str(e), 'INTERNAL_ERROR'), 500
 
 
 @app.route('/api/current-path')

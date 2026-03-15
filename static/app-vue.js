@@ -48,8 +48,10 @@ createApp({
         let logSource = null;
         let progressSource = null;
         let sseRetryCount = 0;
-        const SSE_MAX_RETRIES = 5;
-        const SSE_RETRY_DELAY = 3000;
+        const SSE_CONFIG = {
+            MAX_RETRIES: 5,
+            RETRY_DELAY: 3000
+        };
 
         // 显示 Toast 提示
         const showToast = (message, type = 'info') => {
@@ -77,14 +79,14 @@ createApp({
 
         // 重建 SSE 连接
         const reconnectSSE = () => {
-            if (sseRetryCount < SSE_MAX_RETRIES && isRunning.value) {
+            if (sseRetryCount < SSE_CONFIG.MAX_RETRIES && isRunning.value) {
                 sseRetryCount++;
-                console.log(`SSE 重连尝试 ${sseRetryCount}/${SSE_MAX_RETRIES}`);
-                showToast(`网络不稳定，正在重连... (${sseRetryCount}/${SSE_MAX_RETRIES})`, 'info');
+                console.log(`SSE 重连尝试 ${sseRetryCount}/${SSE_CONFIG.MAX_RETRIES}`);
+                showToast(`网络不稳定，正在重连... (${sseRetryCount}/${SSE_CONFIG.MAX_RETRIES})`, 'info');
 
                 setTimeout(() => {
                     startSSEListeners();
-                }, SSE_RETRY_DELAY);
+                }, SSE_CONFIG.RETRY_DELAY);
             } else if (isRunning.value) {
                 showToast('网络连接中断，请刷新页面', 'error');
             }
@@ -312,19 +314,6 @@ createApp({
             modal.selectedPath = null;
         };
 
-        // 触摸滑动支持
-        const touchStartX = ref(0);
-        const handleTouchStart = (event) => {
-            touchStartX.value = event.touches[0].clientX;
-        };
-
-        const handleTouchEnd = (event, callback) => {
-            const diffX = event.changedTouches[0].clientX - touchStartX.value;
-            if (Math.abs(diffX) > 50) {
-                callback(diffX > 0 ? 'right' : 'left');
-            }
-        };
-
         // 挂载时初始化
         onMounted(() => {
             checkStatus();
@@ -348,9 +337,7 @@ createApp({
             navigateTo,
             confirmDirectory,
             toggleSort,
-            showToast,
-            handleTouchStart,
-            handleTouchEnd
+            showToast
         };
     }
 }).mount('#app');
