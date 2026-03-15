@@ -39,7 +39,9 @@ def run_compression_task(input_dir, output_dir, jobs, prefix, no_skip, status_di
     original_get_progress = compressor.get_progress
     def update_status_dict():
         progress = original_get_progress()
-        status_dict.update(progress)
+        # 逐个键更新，确保 Manager().dict() 能正确同步
+        for key, value in progress.items():
+            status_dict[key] = value
         status_dict['is_running'] = True
 
     # 保存原始 _compress_image 方法
