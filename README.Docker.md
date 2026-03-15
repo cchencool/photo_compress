@@ -4,7 +4,7 @@
 
 - **镜像名称**: `cchencool/photo-compressor:latest`
 - **基础镜像**: `python:3.12-slim`
-- **暴露端口**: 5000 (Web 管理后台)
+- **暴露端口**: 5555 (Web 管理后台)
 
 ## 快速开始
 
@@ -15,7 +15,7 @@
 docker-compose up -d
 
 # 访问管理后台
-http://localhost:5000
+http://localhost:5555
 ```
 
 ### 方式二：CLI 模式
@@ -41,7 +41,7 @@ docker build -t photo-compressor .
 **基本用法：**
 ```bash
 docker run --rm -d \
-  -p 5000:5000 \
+  -p 5555:5555 \
   -v /path/to/input:/photos:ro \
   -v /path/to/output:/output \
   -e DEFAULT_INPUT_DIR=/photos \
@@ -130,7 +130,7 @@ docker run --rm \
 docker-compose up -d
 ```
 
-然后在浏览器访问 `http://localhost:5000`，在界面上配置路径并开始压缩。
+然后在浏览器访问 `http://localhost:5555`，在界面上配置路径并开始压缩。
 
 ## 日志
 
@@ -147,12 +147,12 @@ volumes:
 
 ## 网络
 
-Web 管理后台默认暴露 **5000** 端口。
+Web 管理后台默认暴露 **5555** 端口。
 
 如需修改端口：
 ```yaml
 ports:
-  - "8080:5000"  # 宿主机 8080 映射到容器 5000
+  - "8080:5555"  # 宿主机 8080 映射到容器 5555
 ```
 
 ## 安全考虑
