@@ -172,7 +172,7 @@ createApp({
             }
         };
 
-        // 从日志中解析进度信息（仅更新进度条，不更新成功/失败计数）
+        // 从日志中解析进度信息（包括成功/失败计数）
         const parseProgressFromLog = (log) => {
             // 匹配格式：[数字/数字]
             const match = log.match(/\[(\d+)\/(\d+)\]/);
@@ -185,7 +185,12 @@ createApp({
                     progress.percentage = Math.round(current / total * 1000) / 10;
                 }
             }
-            // 成功/失败计数完全依赖 SSE 进度接口，不再从日志解析
+            // 从日志中提取成功/失败计数：(成功：X, 失败：Y)
+            const countMatch = log.match(/\(成功:(\d+), 失败:(\d+)\)/);
+            if (countMatch) {
+                progress.success_count = parseInt(countMatch[1]);
+                progress.failed_count = parseInt(countMatch[2]);
+            }
         };
 
         // 启动 SSE 监听
@@ -217,18 +222,18 @@ createApp({
                 reconnectSSE();
             };
 
-            // 监听进度 - 作为主要方案
+            // 监听进度 - 作为辅助方案（主要依赖日志解析）
             progressSource = new EventSource('/api/progress');
             progressSource.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    // 直接使用 SSE 进度数据
-                    progress.is_running = data.is_running;
-                    progress.total_files = data.total_files;
-                    progress.processed_count = data.processed_count;
-                    progress.success_count = data.success_count;
-                    progress.failed_count = data.failed_count;
-                    progress.percentage = data.percentage;
+                    // 仅更新基础数据，成功/失败计数由日志解析负责
+                    Object.assign(progress, {
+                        is_running: data.is_running,
+                        total_files: data.total_files,
+                        processed_count: data.processed_count,
+                        percentage: data.percentage
+                    });
 
                     // 当任务不再运行时，重置状态
                     if (!data.is_running && isRunning.value) {

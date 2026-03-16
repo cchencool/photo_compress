@@ -219,6 +219,7 @@ def api_progress():
 def api_directories():
     """获取指定路径下的子目录列表"""
     base_path = request.args.get('path', DEFAULT_INPUT_DIR)
+    sort_order = request.args.get('sort', 'desc')  # 获取排序顺序，默认倒序
 
     try:
         path = Path(base_path)
@@ -228,8 +229,10 @@ def api_directories():
         # 获取直接子目录
         subdirs = [d for d in path.iterdir() if d.is_dir()]
 
+        # 根据 sort 参数决定排序顺序
+        reverse = sort_order == 'desc'
         directories = []
-        for subdir in sorted(subdirs, key=lambda x: x.name.lower()):
+        for subdir in sorted(subdirs, key=lambda x: x.name.lower(), reverse=reverse):
             directories.append({
                 'name': subdir.name,
                 'path': str(subdir),

@@ -38,10 +38,14 @@ def run_compression_task(input_dir, output_dir, jobs, prefix, no_skip, status_di
     original_get_progress = compressor.get_progress
     def update_status_dict():
         progress = original_get_progress()
-        # 逐个键更新，确保 Manager().dict() 能正确同步
-        for key, value in progress.items():
-            status_dict[key] = value
+        # 直接更新共享字典，确保 Manager().dict() 能正确同步
+        # 使用直接赋值而不是 clear()，避免多进程环境下数据丢失
         status_dict['is_running'] = True
+        status_dict['total_files'] = progress['total_files']
+        status_dict['processed_count'] = progress['processed_count']
+        status_dict['success_count'] = progress['success_count']
+        status_dict['failed_count'] = progress['failed_count']
+        status_dict['percentage'] = progress['percentage']
 
     # 保存原始 _compress_image 方法
     original_compress_image = compressor._compress_image
@@ -175,7 +179,9 @@ class ImageCompressor:
                     self._processed_count += 1
                     current = self._processed_count
                     total = self._total_files
-                self._log(f"⏭️ 已压缩，跳过：{file_path.name} [{current}/{total}]")
+                    success = self._success_count
+                    failed = self._failed_count
+                self._log(f"⏭️ 已压缩，跳过：{file_path.name} [{current}/{total}] (成功:{success}, 失败:{failed})")
                 self._processed_images.add(output_path)
                 return True
 
@@ -197,7 +203,9 @@ class ImageCompressor:
                 self._success_count += 1
                 current = self._processed_count
                 total = self._total_files
-            self._log(f"✅ 成功压缩：{file_path.name} [{current}/{total}]")
+                success = self._success_count
+                failed = self._failed_count
+            self._log(f"✅ 成功压缩：{file_path.name} [{current}/{total}] (成功:{success}, 失败:{failed})")
 
             # 记录已处理文件
             self._processed_images.add(output_path)
@@ -209,7 +217,9 @@ class ImageCompressor:
                 self._failed_count += 1
                 current = self._processed_count
                 total = self._total_files
-            self._log(f"❌ 压缩失败：{file_path.name} - 错误：{e.stderr} [{current}/{total}]")
+                success = self._success_count
+                failed = self._failed_count
+            self._log(f"❌ 压缩失败：{file_path.name} - 错误：{e.stderr} [{current}/{total}] (成功:{success}, 失败:{failed})")
             return False
         except Exception as e:
             with self._lock:
@@ -217,7 +227,9 @@ class ImageCompressor:
                 self._failed_count += 1
                 current = self._processed_count
                 total = self._total_files
-            self._log(f"⚠️ 处理错误：{file_path.name} - 原因：{str(e)} [{current}/{total}]")
+                success = self._success_count
+                failed = self._failed_count
+            self._log(f"⚠️ 处理错误：{file_path.name} - 原因：{str(e)} [{current}/{total}] (成功:{success}, 失败:{failed})")
             return False
 
     def start(self) -> bool:
