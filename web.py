@@ -18,9 +18,6 @@ app = Flask(__name__)
 # 全局压缩进程状态
 # 注意：这些全局变量在单 worker 模式下工作，多 worker 模式需要改用 Redis 等外部存储
 compressor_process: multiprocessing.Process = None
-status_manager = multiprocessing.Manager()
-status_dict = multiprocessing.Manager().dict()
-log_queue = multiprocessing.Queue()
 compressor_lock = threading.Lock()
 
 # 从环境变量读取默认路径
@@ -282,4 +279,8 @@ def api_current_path():
 
 
 if __name__ == '__main__':
+    # Manager/Queue 必须在 __main__ 守卫内创建：macOS/Windows 下子进程以 spawn 方式
+    # 启动时会 re-import 本模块，若在模块顶层创建会导致递归启动而崩溃
+    status_dict = multiprocessing.Manager().dict()
+    log_queue = multiprocessing.Queue()
     app.run(host='0.0.0.0', port=5555, debug=False)

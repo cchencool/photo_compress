@@ -322,6 +322,13 @@ createApp({
         // 挂载时初始化
         onMounted(() => {
             checkStatus();
+            fetch('/api/current-path')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.input_dir) config.input_dir = data.input_dir;
+                    if (data.output_dir) config.output_dir = data.output_dir;
+                })
+                .catch(error => console.error('获取默认路径失败:', error));
         });
 
         return {
